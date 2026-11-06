@@ -1,0 +1,62 @@
+# 1. Instalacion y servicios
+ip -4 addr show ens160
+sudo dnf install -y httpd vsftpd openssh-server firewalld iptables-nft
+sudo systemctl enable --now httpd
+sudo systemctl enable --now vsftpd
+sudo systemctl enable --now sshd
+sudo systemctl enable --now firewalld
+systemctl is-active httpd vsftpd sshd firewalld
+
+# 2. Archivos de prueba
+echo "Servidor HTTP funcionando correctamente" | sudo tee /var/www/html/index.html
+sudo useradd -m ftpprueba
+sudo passwd ftpprueba
+echo "Servidor FTP funcionando correctamente" | sudo tee /home/ftpprueba/prueba.txt
+sudo chown ftpprueba:ftpprueba /home/ftpprueba/prueba.txt
+sudo grep -E '^(local_enable|anonymous_enable)=' /etc/vsftpd/vsftpd.conf
+
+# 3. Permisos iniciales
+ZONE=$(sudo firewall-cmd --get-zone-of-interface=ens160)
+sudo firewall-cmd --permanent --zone="$ZONE" --add-service=http
+sudo firewall-cmd --permanent --zone="$ZONE" --add-service=ftp
+sudo firewall-cmd --permanent --zone="$ZONE" --add-service=ssh
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone="$ZONE" --list-services
+
+# 4. Bloqueo con IPTables
+sudo systemctl stop firewalld
+sudo iptables --version
+sudo iptables -I INPUT 1 -p tcp --dport 80 -j REJECT
+sudo iptables -I INPUT 1 -p tcp --dport 21 -j REJECT
+sudo iptables -I INPUT 1 -p tcp --dport 22 -j REJECT
+sudo iptables -L INPUT -n --line-numbers
+
+# 5. Desbloqueo con IPTables
+sudo iptables -D INPUT -p tcp --dport 80 -j REJECT
+sudo iptables -D INPUT -p tcp --dport 21 -j REJECT
+sudo iptables -D INPUT -p tcp --dport 22 -j REJECT
+sudo iptables -L INPUT -n --line-numbers
+
+# 6. Bloqueo con Firewall-cmd
+sudo systemctl start firewalld
+ZONE=$(sudo firewall-cmd --get-zone-of-interface=ens160)
+sudo firewall-cmd --permanent --zone="$ZONE" --add-rich-rule='rule family="ipv4" port port="80" protocol="tcp" reject'
+sudo firewall-cmd --permanent --zone="$ZONE" --add-rich-rule='rule family="ipv4" port port="21" protocol="tcp" reject'
+sudo firewall-cmd --permanent --zone="$ZONE" --add-rich-rule='rule family="ipv4" port port="22" protocol="tcp" reject'
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone="$ZONE" --list-rich-rules
+
+# 7. Desbloqueo con Firewall-cmd
+sudo firewall-cmd --permanent --zone="$ZONE" --remove-rich-rule='rule family="ipv4" port port="80" protocol="tcp" reject'
+sudo firewall-cmd --permanent --zone="$ZONE" --remove-rich-rule='rule family="ipv4" port port="21" protocol="tcp" reject'
+sudo firewall-cmd --permanent --zone="$ZONE" --remove-rich-rule='rule family="ipv4" port port="22" protocol="tcp" reject'
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone="$ZONE" --list-rich-rules
+sudo firewall-cmd --zone="$ZONE" --list-services
+Test-NetConnection 10.0.0.36 -Port 80
+Test-NetConnection 10.0.0.36 -Port 21
+Test-NetConnection 10.0.0.36 -Port 22
+
+ssh arielrc@10.0.0.36
+
+curl.exe -v --user ftpprueba ftp://10.0.0.36/prueba.txt

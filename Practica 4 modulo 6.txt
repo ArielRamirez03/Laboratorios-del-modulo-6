@@ -1,0 +1,53 @@
+PRACTICA 4: 2FA con Google Authenticator (PAM) para acceso SSH
+VM Red Hat: 10.0.0.36 | Host Windows: 10.0.0.24 | Usuario: arielrc
+
+# 0. Sincronizar la hora
+timedatectl
+sudo chronyc makestep
+
+# 1. Instalar Google Authenticator
+sudo dnf install -y epel-release
+# (si es RHEL y falla lo anterior:)
+# sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm
+sudo dnf install -y google-authenticator qrencode
+rpm -q google-authenticator
+
+# 2. Configurar Google Authenticator (como arielrc, no root)
+google-authenticator
+# Respuestas: y, y, y, n, y
+# Escanear QR con la app y escribir el codigo de la app
+
+# 3. Mover el secreto a ~/.ssh (SELinux)
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+mv ~/.google_authenticator ~/.ssh/google_authenticator
+chmod 600 ~/.ssh/google_authenticator
+restorecon -Rv ~/.ssh
+ls -l ~/.ssh/google_authenticator
+
+# 4. Configurar PAM
+sudo nano /etc/pam.d/sshd
+# Linea ANTES de "auth substack password-auth" (sin nullok):
+auth required pam_google_authenticator.so secret=${HOME}/.ssh/google_authenticator
+sudo grep google /etc/pam.d/sshd
+
+# 5. Configurar SSH (archivo que se lee primero)
+sudo tee /etc/ssh/sshd_config.d/01-2fa.conf <<'EOF'
+UsePAM yes
+KbdInteractiveAuthentication yes
+AuthenticationMethods keyboard-interactive
+EOF
+
+# 6. Verificar, validar y reiniciar
+sudo sshd -T | grep -Ei "authenticationmethods|kbdinteractiveauthentication|usepam"
+sudo sshd -t
+sudo systemctl restart sshd
+sudo systemctl status sshd
+
+# 7. Prueba desde el host (PowerShell en Windows)
+ssh arielrc@10.0.0.36
+# Pide: Verification code (app) y Password (contrasena normal)
+whoami
+hostname
+
+# Troubleshooting
+sudo tail -f /var/log/secure

@@ -1,0 +1,25 @@
+sudo dnf install gnupg2 -y
+gpg2 --version
+
+mkdir ~/PracticaCifrado
+cd ~/PracticaCifrado
+
+echo "Mi nombre es Ariel Ramirez y esta es mi practica de cifrado con GPG2" > archivo.txt
+
+ls -l
+cat archivo.txt
+
+gpg2 --symmetric --cipher-algo AES256 archivo.txt
+
+ls -l
+
+rm archivo.txt
+
+ls -l
+cat archivo.txt.gpg
+
+gpg2 --output archivo_descifrado.txt --decrypt archivo.txt.gpg
+
+ls -l
+cat archivo_descifrado.txt
+ls -l
